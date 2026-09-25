@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Potato Olympics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+/* =========================================================================
+   POTATO OLYMPICS — an arcade cabinet built around one running joke: a
+   potato is a TERRIBLE piece of sporting equipment.
+   -------------------------------------------------------------------------
+   This is a DELIBERATELY single dark "arcade cabinet at night" world, so
+   there is no light-theme block here — that's a design choice, not an
+   oversight. Everything still comes from named tokens below so it's easy
+   to re-skin (change a color once, it updates everywhere).
+   ========================================================================= */
+:root{
+  --bg:            #05070c;
+  --cabinet:       #1b1f2d;
+  --cabinet-edge:  #0d0f17;
+  --bezel:         #000000;
+  --marquee:       #ffb84d;
+  --ink:           #eef1f7;
+  --ink-dim:       #9aa3b8;
+  --line:          #2c3145;
+
+  /* broadcast colors */
+  --oly-bg:    #0d2136;
+  --oly-gold:  #ffd166;
+  --oly-green: #33c17c;
+  --burger:    #ffb703;
+
+  /* team colors */
+  --team-ronan:  #ff5a5f;
+  --team-matt:   #4fa3ff;
+  --team-chloe:  #d979ff;
+  --team-kurtis: #ffb84d;
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ height:100%; }
+body{
+  margin:0;
+  min-height:100%;
+  background:
+    radial-gradient(ellipse at 50% -10%, #1a2036 0%, var(--bg) 55%);
+  color:var(--ink);
+  font-family:'VT323', 'Courier New', monospace;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px 16px;
+}
+button{ font-family:inherit; }
+
+.pixel{ font-family:'Press Start 2P', monospace; letter-spacing:0.5px; }
+
+/* ---------- cabinet frame ---------- */
+.cabinet{
+  width:100%;
+  max-width:640px;
+  background:linear-gradient(180deg,#242a3d 0%, var(--cabinet) 40%, var(--cabinet-edge) 100%);
+  border-radius:22px;
+  padding:14px 14px 18px;
+  box-shadow:
+    0 30px 60px -20px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  border:1px solid #333a53;
+}
+.marquee{
+  text-align:center;
+  padding:12px 8px 14px;
+  color:var(--marquee);
+  text-shadow:0 0 10px rgba(255,184,77,0.55), 0 0 2px rgba(255,184,77,0.8);
+  font-size:15px;
+  line-height:1.6;
+}
+.marquee .sub{
+  display:block;
+  margin-top:6px;
+  font-family:'VT323', monospace;
+  font-size:16px;
+  color:var(--ink-dim);
+  text-shadow:none;
+  letter-spacing:0.5px;
+}
+
+.bezel{
+  position:relative;
+  background:var(--bezel);
+  border-radius:12px;
+  padding:10px;
+  border:1px solid #000;
+  box-shadow:inset 0 0 0 2px #33384f, inset 0 0 30px rgba(0,0,0,0.9);
+}
+
+.screen-wrap{
+  position:relative;
+  width:100%;
+  aspect-ratio:4/3;
+  border-radius:6px;
+  overflow:hidden;
+  background:#000;
+}
+
+canvas#game{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  display:block;
+}
+
+.scanlines{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0px,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,0.12) 3px
+  );
+  mix-blend-mode:multiply;
+  opacity:0.55;
+}
+
+/* ---------- overlay screens (HTML, sit above/instead of canvas) ---------- */
+.screen{
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  padding:22px 18px;
+  text-align:center;
+  background:radial-gradient(ellipse at 50% 20%, #131829 0%, #05070c 75%);
+}
+.screen[hidden]{ display:none; }
+/* catapult & bowling render on the canvas underneath — this overlay only
+   hosts the little toast message, so it must stay see-through */
+#screen-catapult, #screen-bowling{
+  background:none;
+  pointer-events:none;
+}
+
+.title-big{
+  font-size:clamp(20px,6vw,30px);
+  color:var(--oly-gold);
+  text-shadow:0 0 14px rgba(255,209,102,0.6);
+  line-height:1.5;
+}
+.title-mid{ font-size:clamp(15px,4.4vw,19px); color:var(--oly-gold); line-height:1.6; }
+.era-year{ font-size:18px; color:var(--ink-dim); letter-spacing:1px; }
+
+.blurb-text{
+  max-width:38ch;
+  font-size:20px;
+  line-height:1.5;
+  color:var(--ink);
+}
+
+.btn{
+  font-family:'Press Start 2P', monospace;
+  font-size:12px;
+  color:#111;
+  background:var(--oly-gold);
+  border:none;
+  border-radius:10px;
+  padding:16px 22px;
+  cursor:pointer;
+  box-shadow:0 4px 0 #b8842f, 0 8px 16px rgba(0,0,0,0.4);
+  touch-action:manipulation;
+  transition:transform 0.05s ease;
+}
+.btn:active{ transform:translateY(3px); box-shadow:0 1px 0 #b8842f; }
+.btn.ghost{
+  background:transparent;
+  color:var(--ink);
+  border:2px solid var(--line);
+  box-shadow:none;
+}
+.btn.ghost:active{ transform:translateY(2px); }
+.btn.small{ font-size:10px; padding:11px 16px; }
+
+.credit{ font-size:15px; color:var(--ink-dim); }
+
+/* ---------- team select ---------- */
+.name-input{
+  width:100%;
+  max-width:300px;
+  padding:12px 14px;
+  font-size:18px;
+  font-family:'VT323', monospace;
+  border-radius:8px;
+  border:2px solid var(--line);
+  background:#10141f;
+  color:var(--ink);
+  text-align:center;
+}
+.name-input::placeholder{ color:var(--ink-dim); }
+.name-input:focus{ outline:none; border-color:var(--oly-gold); }
+
+.team-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  width:100%;
+  max-width:420px;
+}
+.team-card{
+  border-radius:10px;
+  border:2px solid var(--line);
+  background:#10141f;
+  padding:12px 8px;
+  cursor:pointer;
+  color:var(--ink);
+  font-family:inherit;
+  touch-action:manipulation;
+}
+.team-card .dot{
+  width:34px; height:34px; border-radius:50%;
+  margin:0 auto 8px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Press Start 2P', monospace; font-size:13px; color:#111;
+}
+.team-card .name{ font-size:18px; }
+.team-card .sub{ font-size:13px; color:var(--ink-dim); }
+.team-card:active{ transform:translateY(1px); }
+
+/* ---------- village hub ---------- */
+.board{
+  width:100%;
+  max-width:440px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin:2px 0 4px;
+}
+.board-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:16px;
+  background:#0e1220;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:6px 10px;
+}
+.board-row .dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+.board-row .nm{ flex:0 0 auto; width:88px; text-align:left; }
+.board-row .bar-track{ flex:1; height:10px; background:#1c2133; border-radius:6px; overflow:hidden; }
+.board-row .bar-fill{ height:100%; border-radius:6px; }
+.board-row .amt{ flex:0 0 auto; width:56px; text-align:right; font-variant-numeric:tabular-nums; }
+
+.village-buttons{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+
+/* ---------- event control dock (below canvas, inside bezel) ---------- */
+.dock{
+  margin-top:10px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:stretch;
+}
+.dock[hidden]{ display:none; }
+.dock-row{ display:flex; align-items:center; gap:10px; }
+.dock-label{ font-size:14px; color:var(--ink-dim); width:56px; flex:0 0 auto; }
+input[type="range"]{
+  -webkit-appearance:none;
+  appearance:none;
+  flex:1;
+  height:34px;
+  background:transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track{
+  height:8px; border-radius:6px; background:var(--line);
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:30px; height:30px; margin-top:-11px;
+  border-radius:50%;
+  background:var(--oly-gold);
+  border:3px solid #241a05;
+  box-shadow:0 2px 4px rgba(0,0,0,0.5);
+}
+input[type="range"]::-moz-range-track{ height:8px; border-radius:6px; background:var(--line); }
+input[type="range"]::-moz-range-thumb{
+  width:24px; height:24px; border-radius:50%; background:var(--oly-gold); border:3px solid #241a05;
+}
+
+.charge-btn{
+  position:relative;
+  overflow:hidden;
+  width:100%;
+  padding:16px;
+  border-radius:10px;
+  border:2px solid var(--line);
+  background:#10141f;
+  color:var(--ink);
+  font-family:'Press Start 2P', monospace;
+  font-size:12px;
+  touch-action:none;
+  user-select:none;
+}
+.charge-btn .fill{
+  position:absolute; left:0; top:0; bottom:0; width:0%;
+  background:linear-gradient(90deg,#ff5a5f,var(--oly-gold));
+  z-index:0; transition:none;
+}
+.charge-btn span{ position:relative; z-index:1; }
+
+.hint{ font-size:14px; color:var(--ink-dim); min-height:18px; }
+.attempts{ font-size:14px; color:var(--ink-dim); }
+
+.toast{
+  position:absolute;
+  left:50%; top:16%;
+  transform:translate(-50%,0);
+  background:rgba(5,7,12,0.92);
+  border:2px solid var(--oly-gold);
+  color:var(--oly-gold);
+  font-family:'Press Start 2P', monospace;
+  font-size:13px;
+  text-align:center;
+  padding:14px 16px;
+  border-radius:10px;
+  line-height:1.7;
+  pointer-events:none;
+  z-index:5;
+  max-width:80%;
+}
+.toast[hidden]{ display:none; }
+.toast .flavor{ font-family:'VT323', monospace; font-size:16px; color:var(--ink); }
+
+/* ---------- class leaderboard ---------- */
+.class-row{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  background:#0e1220;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:6px 10px;
+}
+.class-row .rank{ width:18px; text-align:center; font-size:12px; color:var(--oly-gold); flex:0 0 auto; }
+.class-row .dot{ width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+.class-row .who{ flex:1; min-width:0; text-align:left; }
+.class-row .who-name{ font-size:17px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.class-row .who-team{ font-size:12px; color:var(--ink-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.class-row .amt{ flex:0 0 auto; font-variant-numeric:tabular-nums; font-size:16px; }
+
+/* ---------- shop ---------- */
+.shop-list{
+  width:100%;
+  max-width:440px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow-y:auto;
+  max-height:100%;
+}
+.shop-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:#0e1220;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:8px 10px;
+  text-align:left;
+}
+.shop-item .icon{ font-size:26px; flex:0 0 auto; width:34px; text-align:center; }
+.shop-item .info{ flex:1; min-width:0; }
+.shop-item .info .nm{ font-size:17px; }
+.shop-item .info .desc{ font-size:13px; color:var(--ink-dim); }
+.shop-item .buy{
+  flex:0 0 auto;
+  font-family:'Press Start 2P', monospace;
+  font-size:10px;
+  padding:9px 10px;
+  border-radius:8px;
+  border:none;
+  cursor:pointer;
+  background:var(--oly-gold);
+  color:#111;
+}
+.shop-item .buy:disabled{
+  background:#2c3145;
+  color:var(--ink-dim);
+  cursor:default;
+}
+.shop-bank{ font-size:18px; color:var(--burger); }
+
+/* result / final */
+.result-box{
+  background:#0e1220;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:14px 18px;
+  max-width:340px;
+  font-size:18px;
+  line-height:1.6;
+}
+.champion{
+  font-size:16px;
+  color:var(--oly-gold);
+  text-shadow:0 0 12px rgba(255,209,102,0.6);
+  line-height:1.7;
+}
+
+@media (max-width:400px){
+  .team-grid{ grid-template-columns:1fr 1fr; }
+  .dock-label{ width:44px; font-size:12px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .btn{ transition:none; }
+}
+</style>
+</head>
+<body>
+
+
+<div class="cabinet">
+  <div class="marquee pixel">
+    POTATO OLYMPICS
+    <span class="sub" id="tickerLine">Four teams. One potato. Zero dignity.</span>
+  </div>
+
+  <div class="bezel">
+    <div class="screen-wrap" id="screenWrap">
+      <canvas id="game" width="800" height="600"></canvas>
+      <div class="scanlines"></div>
+
+      <!-- ============ MENU ============ -->
+      <section class="screen" id="screen-menu">
+        <div class="title-big pixel">POTATO<br>OLYMPICS</div>
+        <div class="blurb-text">Four teams compete for the only medal that matters: cheeseburgers. The catch? A potato is a <em>terrible</em> piece of sporting equipment.</div>
+        <button class="btn" id="btnStart">▶ PLAY</button>
+        <button class="btn ghost small" id="btnMenuLeaderboard">🏅 CLASS LEADERBOARD</button>
+        <div class="credit" id="creditLine">Made by a Grade 5 Computer Gaming History project</div>
+      </section>
+
+      <!-- ============ INTRO ============ -->
+      <section class="screen" id="screen-blurbOlympics" hidden>
+        <div class="title-mid pixel">WELCOME TO THE GAMES</div>
+        <div class="blurb-text">It doesn't bounce properly. It doesn't roll straight. It's hard to even hold. Every event here is built around one fact:</div>
+        <div class="title-mid pixel" style="color:var(--burger)">the potato is TERRIBLE at sports 🥔</div>
+        <div class="blurb-text" style="font-size:16px;">Earn 🍔 cheeseburgers by competing — then spend them at the shop to make your potato (slightly) less terrible.</div>
+        <button class="btn" id="btnToTeamSelect">▶ TAP TO CONTINUE</button>
+      </section>
+
+      <!-- ============ TEAM SELECT ============ -->
+      <section class="screen" id="screen-teamSelect" hidden>
+        <div class="title-mid pixel">CHOOSE YOUR TEAM</div>
+        <div class="blurb-text" style="font-size:16px;">No special powers — every team plays the same. Pick who you're cheering for.</div>
+        <input type="text" id="playerNameInput" class="name-input" placeholder="Type your first name" maxlength="18" autocomplete="off">
+        <div class="team-grid" id="teamGrid"></div>
+      </section>
+
+      <!-- ============ VILLAGE HUB ============ -->
+      <section class="screen" id="screen-village" hidden>
+        <div class="title-mid pixel" style="font-size:15px;">OLYMPIC VILLAGE</div>
+        <div class="hint" id="villageRoundsLine"></div>
+        <div class="board" id="leaderboard"></div>
+        <div class="village-buttons">
+          <button class="btn small" id="btnGoCatapult">🥔 CATAPULT</button>
+          <button class="btn small" id="btnGoBowling">🎳 BOWLING</button>
+          <button class="btn small" id="btnGoShop">🛒 SHOP</button>
+        </div>
+        <button class="btn ghost small" id="btnFinish">🏆 FINISH &amp; CROWN CHAMPION</button>
+        <button class="btn ghost small" id="btnVillageLeaderboard">🏅 CLASS LEADERBOARD</button>
+      </section>
+
+      <!-- ============ CLASS LEADERBOARD (shared across every iPad) ============ -->
+      <section class="screen" id="screen-classBoard" hidden>
+        <div class="title-mid pixel" style="font-size:15px;">CLASS LEADERBOARD</div>
+        <div class="hint">Top 10 all-time — every classmate, synced live</div>
+        <div class="board" id="classBoardList"></div>
+        <button class="btn ghost small" id="btnClassBoardBack">◀ BACK</button>
+      </section>
+
+      <!-- ============ SHOP ============ -->
+      <section class="screen" id="screen-shop" hidden>
+        <div class="title-mid pixel" style="font-size:15px;">EQUIPMENT SHOP</div>
+        <div class="shop-bank" id="shopBank"></div>
+        <div class="shop-list" id="shopList"></div>
+        <button class="btn ghost small" id="btnShopBack">◀ BACK TO VILLAGE</button>
+      </section>
+
+      <!-- ============ CATAPULT ============ -->
+      <section class="screen" id="screen-catapult" hidden style="justify-content:flex-end; padding-bottom:8px;">
+        <div class="toast" id="catapultToast" hidden>
+          <div id="catapultToastMain">🍔 +0</div>
+          <div class="flavor" id="catapultToastFlavor"></div>
+        </div>
+      </section>
+
+      <!-- ============ BOWLING ============ -->
+      <section class="screen" id="screen-bowling" hidden style="justify-content:flex-end; padding-bottom:8px;">
+        <div class="toast" id="bowlingToast" hidden>
+          <div id="bowlingToastMain">🍔 +0</div>
+          <div class="flavor" id="bowlingToastFlavor"></div>
+        </div>
+      </section>
+
+      <!-- ============ RESULT (shared) ============ -->
+      <section class="screen" id="screen-result" hidden>
+        <div class="title-mid pixel" id="resultTitle">EVENT COMPLETE</div>
+        <div class="result-box" id="resultBox"></div>
+        <button class="btn" id="btnBackToVillage">◀ BACK TO VILLAGE</button>
+      </section>
+
+      <!-- ============ FINAL ============ -->
+      <section class="screen" id="screen-final" hidden>
+        <div class="title-mid pixel">🏆 FINAL RESULTS</div>
+        <div class="champion pixel" id="finalPlayerLine"></div>
+        <div class="champion pixel" id="championLine"></div>
+        <div class="board" id="finalBoard"></div>
+        <button class="btn" id="btnPlayAgain">▶ PLAY AGAIN</button>
+        <button class="btn ghost small" id="btnFinalLeaderboard">🏅 CLASS LEADERBOARD</button>
+      </section>
+    </div>
+
+    <!-- control dock: only meaningful during catapult / bowling -->
+    <div class="dock" id="dockCatapult" hidden>
+      <div class="dock-row">
+        <div class="dock-label">ANGLE</div>
+        <input type="range" id="catapultAngle" min="20" max="70" value="45">
+      </div>
+      <button class="charge-btn" id="catapultCharge"><div class="fill" id="catapultFill"></div><span id="catapultBtnLabel">HOLD TO CHARGE, RELEASE TO LAUNCH</span></button>
+      <div class="attempts" id="catapultAttemptsLine"></div>
+    </div>
+
+    <div class="dock" id="dockBowling" hidden>
+      <div class="dock-row">
+        <div class="dock-label">AIM</div>
+        <input type="range" id="bowlingAim" min="-25" max="25" value="0">
+      </div>
+      <button class="charge-btn" id="bowlingCharge"><div class="fill" id="bowlingFill"></div><span id="bowlingBtnLabel">HOLD TO CHARGE, RELEASE TO ROLL</span></button>
+      <div class="attempts" id="bowlingAttemptsLine"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================================
+   CONFIG — tweak these numbers/names and the game changes. This is the
+   easiest place for a 10-year-old co-developer to jump in and make it
+   "theirs" without touching the logic below.
+   ========================================================================= */
+const CONFIG = {
+  credit: "Made by a Grade 5 Computer Gaming History project",
+
+  attemptsPerEvent: 3,      // throws/rolls per visit to an event
+  maxEventRounds: 5,        // total event visits (Catapult + Bowling combined)
+                             // before the Olympics auto-finishes and crowns a champion
+
+  // 0 = the potato flies/rolls perfectly straight. 1 = total chaos.
+  // The whole joke of Potato Olympics is that a potato is a TERRIBLE
+  // piece of sporting equipment — it starts wild on purpose, and shop
+  // items are what let a team calm it down (see SHOP_ITEMS below).
+  potatoWonkiness: 0.8,
+  minWonkinessMult: 0.15,   // no purchase ever makes it PERFECTLY straight
+  maxLuckChance: 0.6,       // cap on stacked Lucky-item chance
+
+  luckyBonusBurgers: 20,    // flat bonus when a "Lucky Potato" triggers
+
+  teams: [
+    { key:"ronan",  name:"Kru Ronan",  color:"#ff5a5f" },
+    { key:"matt",   name:"Kru Matt",   color:"#4fa3ff" },
+    { key:"chloe",  name:"Kru Chloe",  color:"#d979ff" },
+    { key:"kurtis", name:"Kru Kurtis", color:"#ffb84d" }
+  ],
+
+  // catapult burgers: 1 cheeseburger for every N meters of distance
+  catapultMetersPerBurger: 2,
+  // flavor text only now — the burger AMOUNT comes from the formula above
+  catapultFlavorTiers: [
+    { min:0,   max:60,  flavor:"Barely rolled off the spoon." },
+    { min:60,  max:120, flavor:"Decent lob!" },
+    { min:120, max:190, flavor:"That's some serious hang time." },
+    { min:190, max:Infinity, flavor:"POTATO IN ORBIT!" }
+  ],
+
+  bowlingPinCount: 6,
+  bowlingBurgersPerPin: 10,
+  bowlingStrikeBonus: 50,
+  // the back row of pins spans 52 units (±26 from center), so a knock
+  // radius under ~26 can never physically touch both back corner pins
+  // at once — which is why strikes used to be nearly impossible. 24 (and
+  // the Giant Potato item stacking another +50% on top) makes a
+  // strike a real, if still lucky, possibility.
+  bowlingBaseKnockRadius: 24,
+  bowlingBaseDrawSize: { aimW:32, aimH:24, rollW:30, rollH:22 },
+
+  // roughly how many burgers the 3 AI teams earn per event visit (min,max)
+  // — back up near the original range (was over-nerfed to [15,70]), just
+  // trimmed a bit so a real kid's score can still compete
+  aiBurgersPerEventRange: [25, 115],
+  // chance an AI team buys a shop item after an event visit, if it can afford one
+  aiShopChance: 0.5
+};
+
+/* =========================================================================
+   THE SHOP — spend cheeseburgers to make your potato (slightly) less
+   terrible. Each item's "effect" is added into the totals computed by
+   effectiveWonkinessMult() / effectivePowerMult() / effectiveLuckChance()
+   below, so buying more than one stacks. Add a new item here and it just
+   works — no other code needs to change.
+   ========================================================================= */
+const SHOP_ITEMS = [
+  { key:"grip",  name:"Steady Grip Gloves",   icon:"🧤", cost:25,
+    desc:"-15% wonkiness — a little less wobble.",      effect:{ wonkiness:-0.15 } },
+  { key:"aero",  name:"Aerodynamic Potato",   icon:"🪽", cost:45,
+    desc:"-25% wonkiness — flies/rolls straighter.",    effect:{ wonkiness:-0.25 } },
+  { key:"power", name:"Power Gauntlets",      icon:"💪", cost:50,
+    desc:"+15% power on every throw and roll.",         effect:{ power:0.15 } },
+  { key:"turbo", name:"Turbo Boosters",       icon:"🚀", cost:75,
+    desc:"+25% power on every throw and roll.",         effect:{ power:0.25 } },
+  { key:"luck",  name:"Lucky Four-Leaf Chip", icon:"🍀", cost:60,
+    desc:"15% chance of a Lucky Potato bonus.",         effect:{ luck:0.15 } },
+  { key:"giant", name:"Giant Potato",         icon:"🥔", cost:55,
+    desc:"+50% bigger potato in Bowling — easier to hit pins.", effect:{ bowlSize:0.5 } }
+];
+
+// how much of each stat bonus the player's team currently owns
+function effectiveWonkinessMult(){
+  let reduction = 0;
+  SHOP_ITEMS.forEach(it => { if (App.owned[it.key] && it.effect.wonkiness) reduction += -it.effect.wonkiness; });
+  return clamp(1 - reduction, CONFIG.minWonkinessMult, 1);
+}
+function effectivePowerMult(){
+  let bonus = 0;
+  SHOP_ITEMS.forEach(it => { if (App.owned[it.key] && it.effect.power) bonus += it.effect.power; });
+  return 1 + bonus;
+}
+function effectiveLuckChance(){
+  let luck = 0;
+  SHOP_ITEMS.forEach(it => { if (App.owned[it.key] && it.effect.luck) luck += it.effect.luck; });
+  return clamp(luck, 0, CONFIG.maxLuckChance);
+}
+function rollLuck(){
+  return Math.random() < effectiveLuckChance();
+}
+// how much bigger the Bowling potato is (Catapult isn't affected — the
+// Giant Potato item is scoped to Bowling only, per how it was requested)
+function effectiveBowlSizeMult(){
+  let bonus = 0;
+  SHOP_ITEMS.forEach(it => { if (App.owned[it.key] && it.effect.bowlSize) bonus += it.effect.bowlSize; });
+  return 1 + bonus;
+}
+
+/* =========================================================================
+   TINY HELPERS
+   ========================================================================= */
+const $ = (id) => document.getElementById(id);
+const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
+const rand = (min,max) => min + Math.random()*(max-min);
+const lerp = (a,b,t) => a + (b-a)*t;
+const choice = (arr) => arr[Math.floor(Math.random()*arr.length)];
+
+/* =========================================================================
+   APP STATE — the one object that describes "what's happening right now".
+   Kept flat and simple on purpose so it can be snapshotted/restored.
+   ========================================================================= */
+const App = {
+  state: "menu",       // which screen/mode we're in
+  team: null,          // the team key the player picked
+  playerName: null,    // this classmate's typed first name (for the shared leaderboard)
+  leaderboard: {},      // { teamKey: totalBurgers } — also doubles as each team's spendable bank
+  owned: {},            // { shopItemKey: true } — equipment the player's team has bought
+  aiOwned: {},           // { teamKey: { shopItemKey: true } } — equipment the AI teams have bought
+  eventsPlayed: { catapult:0, bowling:0 },
+  roundsPlayed: 0,       // total event visits so far (caps at CONFIG.maxEventRounds)
+  pendingResult: null   // { title, lines:[], burgersEarned }
+};
+
+CONFIG.teams.forEach(t => { App.leaderboard[t.key] = 0; });
+
+/* =========================================================================
+   SCREEN SWITCHING
+   ========================================================================= */
+const SCREEN_IDS = [
+  "menu","blurbOlympics","teamSelect","village","shop","classBoard",
+  "catapult","bowling","result","final"
+];
+
+const ticker = $("tickerLine");
+const TICKER_TEXT = {
+  menu: "Four teams. One potato. Zero dignity.",
+  blurbOlympics: "Welcome to the Potato Olympics",
+  teamSelect: "Choose your team",
+  village: "Potato Olympics Village",
+  shop: "Equipment Shop",
+  classBoard: "Class Leaderboard",
+  catapult: "Event: Potato Catapult",
+  bowling: "Event: Potato Bowling",
+  result: "Potato Olympics",
+  final: "Potato Olympics — Final Results"
+};
+
+// which screen "◀ BACK" on the class leaderboard should return to —
+// it's reachable from three different places (menu, village, final)
+let classBoardReturnTo = "menu";
+
+function showScreen(name){
+  App.state = name;
+  // catapult/bowling render on the canvas underneath their (see-through)
+  // overlay screen; every other screen is plain HTML over a blank canvas.
+  SCREEN_IDS.forEach(id => { $("screen-"+id).hidden = (id !== name); });
+
+  $("dockCatapult").hidden = (name !== "catapult");
+  $("dockBowling").hidden  = (name !== "bowling");
+
+  ticker.textContent = TICKER_TEXT[name] || "";
+
+  if (name === "teamSelect") $("playerNameInput").value = "";
+  if (name === "village"){
+    renderLeaderboard();
+    $("villageRoundsLine").textContent = `Events played: ${App.roundsPlayed} / ${CONFIG.maxEventRounds}`;
+  }
+  if (name === "shop") renderShop();
+  if (name === "classBoard") refreshClassLeaderboard();
+}
+
+/* =========================================================================
+   CANVAS SETUP — logical resolution stays fixed, CSS scales it, and we
+   correct for devicePixelRatio so it stays crisp on an iPad's screen.
+   ========================================================================= */
+const canvas = $("game");
+const ctx = canvas.getContext("2d");
+const LOGICAL_W = 800, LOGICAL_H = 600;
+
+function resizeCanvas(){
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  ctx.setTransform(dpr * (rect.width/LOGICAL_W), 0, 0, dpr * (rect.height/LOGICAL_H), 0, 0);
+}
+new ResizeObserver(resizeCanvas).observe(canvas);
+window.addEventListener("orientationchange", () => setTimeout(resizeCanvas, 50));
+
+// convert a pointer/touch client position to LOGICAL canvas coordinates
+function toCanvasXY(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left) / rect.width * LOGICAL_W,
+    y: (clientY - rect.top) / rect.height * LOGICAL_H
+  };
+}
+
+/* =========================================================================
+   TINY SOUND — a couple of procedural beeps, no audio files needed.
+   iOS requires a user gesture before audio can play, so we lazily create
+   the AudioContext on the first tap.
+   ========================================================================= */
+let actx = null;
+function ensureAudio(){
+  // iPad Safari only allows audio to start from inside a real tap/click,
+  // so we "unlock" it on the very first tap anywhere on the page — after
+  // that, beep() below can fire freely from inside the game loop.
+  if (!actx){
+    try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return; }
+  }
+  if (actx.state === "suspended") actx.resume().catch(()=>{});
+}
+document.addEventListener("pointerdown", ensureAudio, { once:true });
+
+function beep(freq, dur, type){
+  try{
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = actx.createOscillator();
+    const gain = actx.createGain();
+    osc.type = type || "square";
+    osc.frequency.value = freq;
+    gain.gain.value = 0.06;
+    osc.connect(gain).connect(actx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+    osc.stop(actx.currentTime + dur);
+  }catch(e){ /* audio isn't essential — fail silently */ }
+}
+
+/* =========================================================================
+   DRAW HELPERS — a hand-drawn potato, used everywhere in the game.
+   ========================================================================= */
+function drawPotato(x, y, w, h, rotation){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation || 0);
+  ctx.fillStyle = "#caa06a";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w/2, h/2, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(120,85,40,0.35)";
+  ctx.beginPath(); ctx.ellipse(-w*0.15, -h*0.1, w*0.10, h*0.08, 0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(w*0.18, h*0.12, w*0.08, h*0.06, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(w*0.05, -h*0.2, w*0.06, h*0.05, 0.1, 0, Math.PI*2); ctx.fill();
+  // little eyes, because a potato with a face is funnier
+  ctx.fillStyle = "#2a1c0d";
+  ctx.beginPath(); ctx.arc(-w*0.12, -h*0.05, Math.max(1.5,w*0.035), 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(w*0.05, -h*0.06, Math.max(1.5,w*0.035), 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+/* =========================================================================
+   POTATO OLYMPICS EVENTS
+   Shared "wonky flight" helper: every event applies small random sideways
+   pushes to the potato in mid-air/mid-roll, because a potato is a
+   TERRIBLE piece of sporting equipment and that unpredictability is the
+   whole joke of the game.
+   ========================================================================= */
+function wonkyPush(dt){
+  return rand(-1,1) * CONFIG.potatoWonkiness * effectiveWonkinessMult() * 240 * dt;
+}
+
+function tierFor(list, value){
+  return list.find(t => value >= t.min && value < t.max) || list[list.length-1];
+}
+
+function addBurgers(n){
+  if (!App.team) return;
+  App.leaderboard[App.team] += n;
+}
+
+function simulateAITeams(range){
+  CONFIG.teams.forEach(t => {
+    if (t.key === App.team) return;
+    App.leaderboard[t.key] += Math.round(rand(range[0], range[1]));
+
+    // AI teams shop too — and every purchase is burgers coming back OUT
+    // of their bank, which is also what keeps their totals from running
+    // away from a real kid's score.
+    if (!App.aiOwned[t.key]) App.aiOwned[t.key] = {};
+    if (Math.random() < CONFIG.aiShopChance){
+      const affordable = SHOP_ITEMS.filter(it => !App.aiOwned[t.key][it.key] && App.leaderboard[t.key] >= it.cost);
+      if (affordable.length){
+        const pick = choice(affordable);
+        App.leaderboard[t.key] -= pick.cost;
+        App.aiOwned[t.key][pick.key] = true;
+      }
+    }
+  });
+}
+
+/* ---------------- CATAPULT ---------------- */
+const Catapult = {
+  phase:"aim",      // aim | flight | done
+  attemptsLeft:0,
+  bestBurgers:0,
+  bestDistance:0,
+  angleDeg:45,
+  charging:false,
+  chargeT:0,
+  power:0,
+  x:0,y:0,vx:0,vy:0,
+  groundY: LOGICAL_H*0.82,
+  launchX: 90,
+
+  begin(){
+    this.attemptsLeft = CONFIG.attemptsPerEvent;
+    this.bestBurgers = 0; this.bestDistance = 0;
+    this.phase = "aim";
+    updateCatapultAttemptsLine();
+  },
+  startCharge(){
+    if (this.phase !== "aim") return;
+    this.charging = true; this.chargeT = 0;
+  },
+  release(){
+    if (!this.charging) return;
+    this.charging = false;
+    this.power = clamp(this.power, 0.15, 1);
+    const angle = this.angleDeg * Math.PI/180;
+    const speed = lerp(220, 520, this.power) * effectivePowerMult();
+    this.x = this.launchX; this.y = this.groundY;
+    this.vx = Math.cos(angle) * speed;
+    this.vy = -Math.sin(angle) * speed;
+    this.phase = "flight";
+    beep(180,0.12,"sawtooth");
+  },
+  update(dt){
+    if (this.charging){
+      this.chargeT += dt;
+      this.power = (Math.sin(this.chargeT*3.2)+1)/2;
+      $("catapultFill").style.width = (this.power*100)+"%";
+    }
+    if (this.phase === "flight"){
+      this.vy += 620*dt;         // gravity
+      this.vx += wonkyPush(dt);  // a potato does NOT fly straight
+      this.x += this.vx*dt;
+      this.y += this.vy*dt;
+      if (this.y >= this.groundY){
+        this.y = this.groundY;
+        this.landed();
+      }
+    }
+  },
+  landed(){
+    this.phase = "done";
+    const meters = Math.round((this.x - this.launchX) / 4);
+    const tier = tierFor(CONFIG.catapultFlavorTiers, meters);
+    const lucky = rollLuck();
+    // 1 cheeseburger for every CONFIG.catapultMetersPerBurger meters
+    const burgers = Math.floor(meters / CONFIG.catapultMetersPerBurger) + (lucky ? CONFIG.luckyBonusBurgers : 0);
+    this.bestDistance = Math.max(this.bestDistance, meters);
+    this.bestBurgers += burgers;
+    addBurgers(burgers);
+    this.attemptsLeft--;
+    updateCatapultAttemptsLine();
+    beep(140,0.15,"square");
+
+    $("catapultToastMain").textContent = lucky ? `🍀 LUCKY POTATO! 🍔 +${burgers}` : `🍔 +${burgers}   (${meters}m)`;
+    $("catapultToastFlavor").textContent = tier.flavor + (lucky ? ` Plus a lucky +${CONFIG.luckyBonusBurgers} bonus!` : "");
+    $("catapultToast").hidden = false;
+
+    setTimeout(() => {
+      $("catapultToast").hidden = true;
+      if (this.attemptsLeft > 0){
+        this.phase = "aim";
+      } else {
+        finishEvent("catapult", "🥔 CATAPULT COMPLETE",
+          [`Best throw: ${this.bestDistance}m`, `Cheeseburgers earned: 🍔 ${this.bestBurgers}`]);
+      }
+    }, 1400);
+  },
+  draw(){
+    ctx.fillStyle = "#0d2136";
+    ctx.fillRect(0,0,LOGICAL_W,LOGICAL_H);
+    // sky gradient-ish stripes for a "stadium" feel
+    ctx.fillStyle = "rgba(255,209,102,0.06)";
+    for (let i=0;i<6;i++) ctx.fillRect(0, i*90, LOGICAL_W, 4);
+
+    // ground
+    ctx.fillStyle = "#173c2a";
+    ctx.fillRect(0, this.groundY, LOGICAL_W, LOGICAL_H-this.groundY);
+    // distance markers every ~40m
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = "12px 'VT323'";
+    ctx.textAlign = "center";
+    for (let m=0;m<=240;m+=40){
+      const gx = this.launchX + m*4;
+      if (gx > LOGICAL_W) break;
+      ctx.beginPath(); ctx.moveTo(gx,this.groundY); ctx.lineTo(gx,this.groundY+10); ctx.stroke();
+      ctx.fillText(m+"m", gx, this.groundY+26);
+    }
+
+    // catapult (simple wooden arm)
+    ctx.fillStyle = "#8a5a30";
+    ctx.fillRect(this.launchX-14, this.groundY-14, 28, 14);
+    ctx.save();
+    ctx.translate(this.launchX, this.groundY-14);
+    const armAngle = (this.phase==="aim" ? this.angleDeg : 20) * Math.PI/180;
+    ctx.rotate(-armAngle);
+    ctx.fillStyle = "#5c3b1e";
+    ctx.fillRect(0,-5,70,10);
+    ctx.restore();
+
+    // aim preview line
+    if (this.phase === "aim"){
+      const angle = this.angleDeg*Math.PI/180;
+      ctx.strokeStyle = "rgba(255,209,102,0.5)";
+      ctx.setLineDash([6,8]);
+      ctx.beginPath();
+      ctx.moveTo(this.launchX, this.groundY-20);
+      ctx.lineTo(this.launchX + Math.cos(angle)*90, this.groundY-20-Math.sin(angle)*90);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // potato
+    const px = this.phase==="aim" ? this.launchX : this.x;
+    const py = this.phase==="aim" ? this.groundY-24 : this.y;
+    drawPotato(px, py, 30, 22, this.phase==="flight" ? this.x*0.05 : 0);
+  }
+};
+function updateCatapultAttemptsLine(){
+  $("catapultAttemptsLine").textContent = `Throws left: ${Catapult.attemptsLeft} / ${CONFIG.attemptsPerEvent}`;
+}
+$("catapultAngle").addEventListener("input", (e) => { Catapult.angleDeg = Number(e.target.value); });
+bindChargeButton($("catapultCharge"), () => Catapult.startCharge(), () => Catapult.release(), () => App.state==="catapult" && Catapult.phase==="aim");
+
+/* ---------------- BOWLING ---------------- */
+const Bowling = {
+  phase:"aim",
+  attemptsLeft:0,
+  totalPins:0,
+  totalBurgers:0,
+  aimDeg:0,
+  charging:false, chargeT:0, power:0,
+  x:0,y:0,vx:0,vy:0,
+  pins:[],
+  laneLeft: LOGICAL_W*0.28, laneRight: LOGICAL_W*0.72,
+  laneTop: LOGICAL_H*0.14, laneBottom: LOGICAL_H*0.86,
+
+  begin(){
+    this.attemptsLeft = CONFIG.attemptsPerEvent;
+    this.totalPins = 0; this.totalBurgers = 0;
+    this.phase = "aim";
+    this.setupPins();
+    updateBowlingAttemptsLine();
+  },
+  setupPins(){
+    // 6 pins in a triangle near the top of the lane. The ball rolls from
+    // laneBottom (the bowler) toward laneTop, so the single "head pin"
+    // belongs at the FRONT of the deck (closest to the bowler, hit
+    // first) and the row of 3 at the BACK wall — hence [3,2,1], not
+    // [1,2,3], as y counts up away from the bowler.
+    const cx = (this.laneLeft+this.laneRight)/2;
+    const rows = [3,2,1];
+    this.pins = [];
+    let y = this.laneTop + 20;
+    rows.forEach((count) => {
+      const spread = (count-1) * 26;
+      for (let i=0;i<count;i++){
+        this.pins.push({ x: cx - spread/2 + i*26, y, down:false });
+      }
+      y += 26;
+    });
+  },
+  startCharge(){ if (this.phase==="aim") { this.charging = true; this.chargeT = 0; } },
+  release(){
+    if (!this.charging) return;
+    this.charging = false;
+    this.power = clamp(this.power, 0.15, 1);
+    const angle = this.aimDeg * Math.PI/180;
+    const speed = lerp(160, 420, this.power) * effectivePowerMult();
+    this.x = (this.laneLeft+this.laneRight)/2; this.y = this.laneBottom-10;
+    this.vx = Math.sin(angle) * speed;
+    this.vy = -Math.cos(angle) * speed;
+    this.phase = "roll";
+    beep(180,0.1,"triangle");
+  },
+  update(dt){
+    if (this.charging){
+      this.chargeT += dt;
+      this.power = (Math.sin(this.chargeT*3.4)+1)/2;
+      $("bowlingFill").style.width = (this.power*100)+"%";
+    }
+    if (this.phase === "roll"){
+      this.vx += wonkyPush(dt)*1.4;   // a potato does NOT roll straight
+      const speed = Math.hypot(this.vx,this.vy);
+      const decel = Math.min(speed, 90*dt);
+      if (speed > 0){
+        this.vx -= (this.vx/speed)*decel;
+        this.vy -= (this.vy/speed)*decel;
+      }
+      this.x += this.vx*dt; this.y += this.vy*dt;
+
+      // knock down nearby pins — a bigger (Giant Potato) potato has a
+      // bigger knock-down radius, which is the whole point of the item
+      const knockRadius = CONFIG.bowlingBaseKnockRadius * effectiveBowlSizeMult();
+      this.pins.forEach(p => {
+        if (!p.down && Math.hypot(p.x-this.x, p.y-this.y) < knockRadius){
+          p.down = true; beep(300,0.06,"square");
+        }
+      });
+
+      const gutter = this.x < this.laneLeft+6 || this.x > this.laneRight-6;
+      const stopped = Math.hypot(this.vx,this.vy) < 14;
+      const reachedEnd = this.y <= this.laneTop+6;
+      if (gutter || stopped || reachedEnd){
+        this.finishRoll(gutter);
+      }
+    }
+  },
+  finishRoll(gutter){
+    this.phase = "done";
+    const knocked = gutter ? 0 : this.pins.filter(p=>p.down).length;
+    const strike = knocked >= CONFIG.bowlingPinCount;
+    const lucky = rollLuck();
+    let burgers = knocked * CONFIG.bowlingBurgersPerPin;
+    if (strike) burgers += CONFIG.bowlingStrikeBonus;
+    if (lucky) burgers += CONFIG.luckyBonusBurgers;
+    this.totalPins += knocked;
+    this.totalBurgers += burgers;
+    addBurgers(burgers);
+    this.attemptsLeft--;
+    updateBowlingAttemptsLine();
+
+    $("bowlingToastMain").textContent = strike ? "🎳 POTATO STRIKE!" : (lucky ? `🍀 LUCKY POTATO! 🍔 +${burgers}` : `🍔 +${burgers}`);
+    const pinsLine = gutter ? "Straight into the gutter. Classic potato." : `${knocked}/${CONFIG.bowlingPinCount} pins down`;
+    $("bowlingToastFlavor").textContent = pinsLine + (lucky && !strike ? ` — plus a lucky +${CONFIG.luckyBonusBurgers} bonus!` : "");
+    $("bowlingToast").hidden = false;
+
+    setTimeout(() => {
+      $("bowlingToast").hidden = true;
+      if (this.attemptsLeft > 0){
+        this.setupPins();
+        this.phase = "aim";
+      } else {
+        finishEvent("bowling", "🎳 BOWLING COMPLETE",
+          [`Pins knocked: ${this.totalPins}`, `Cheeseburgers earned: 🍔 ${this.totalBurgers}`]);
+      }
+    }, 1400);
+  },
+  draw(){
+    ctx.fillStyle = "#0d2136";
+    ctx.fillRect(0,0,LOGICAL_W,LOGICAL_H);
+    // lane
+    ctx.fillStyle = "#7a5230";
+    ctx.fillRect(this.laneLeft, this.laneTop, this.laneRight-this.laneLeft, this.laneBottom-this.laneTop);
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.strokeRect(this.laneLeft, this.laneTop, this.laneRight-this.laneLeft, this.laneBottom-this.laneTop);
+    // gutters
+    ctx.fillStyle = "#111722";
+    ctx.fillRect(this.laneLeft-16, this.laneTop, 16, this.laneBottom-this.laneTop);
+    ctx.fillRect(this.laneRight, this.laneTop, 16, this.laneBottom-this.laneTop);
+
+    // pins
+    this.pins.forEach(p => {
+      if (p.down) return;
+      ctx.fillStyle = "#f4f1e8";
+      ctx.beginPath(); ctx.ellipse(p.x,p.y,7,11,0,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle = "#c0392b"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p.x-6,p.y-2); ctx.lineTo(p.x+6,p.y-2); ctx.stroke();
+    });
+
+    // aim preview
+    if (this.phase === "aim"){
+      const angle = this.aimDeg*Math.PI/180;
+      const sx = (this.laneLeft+this.laneRight)/2, sy = this.laneBottom-10;
+      ctx.strokeStyle = "rgba(255,209,102,0.5)";
+      ctx.setLineDash([6,8]);
+      ctx.beginPath(); ctx.moveTo(sx,sy);
+      ctx.lineTo(sx+Math.sin(angle)*80, sy-Math.cos(angle)*80);
+      ctx.stroke(); ctx.setLineDash([]);
+      const sizeMult = effectiveBowlSizeMult();
+      const s = CONFIG.bowlingBaseDrawSize;
+      drawPotato(sx,sy,s.aimW*sizeMult,s.aimH*sizeMult,0);
+    } else if (this.phase === "roll"){
+      const sizeMult = effectiveBowlSizeMult();
+      const s = CONFIG.bowlingBaseDrawSize;
+      drawPotato(this.x,this.y,s.rollW*sizeMult,s.rollH*sizeMult, this.y*0.05);
+    }
+  }
+};
+function updateBowlingAttemptsLine(){
+  $("bowlingAttemptsLine").textContent = `Rolls left: ${Bowling.attemptsLeft} / ${CONFIG.attemptsPerEvent}`;
+}
+$("bowlingAim").addEventListener("input", (e) => { Bowling.aimDeg = Number(e.target.value); });
+bindChargeButton($("bowlingCharge"), () => Bowling.startCharge(), () => Bowling.release(), () => App.state==="bowling" && Bowling.phase==="aim");
+
+/* generic press-and-hold charge button, works for mouse + touch */
+function bindChargeButton(el, onStart, onRelease, canStart){
+  let active = false;
+  el.addEventListener("pointerdown", (e) => {
+    if (!canStart()) return;
+    active = true;
+    el.setPointerCapture(e.pointerId);
+    onStart();
+  });
+  const end = (e) => { if (active){ active = false; onRelease(); } };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+  el.addEventListener("pointerleave", (e) => { /* keep charging even if finger drifts off the button */ });
+}
+
+let resultLeadsToFinal = false;
+
+function crownChampion(){
+  const sorted = [...CONFIG.teams].sort((a,b) => App.leaderboard[b.key]-App.leaderboard[a.key]);
+  const champ = sorted[0];
+  $("finalPlayerLine").textContent = App.team ? (App.playerName || "Anonymous Potato") : "";
+  $("championLine").innerHTML = `TEAM ${champ.name.toUpperCase()}<br>IS THE POTATO OLYMPICS CHAMPION!`;
+  renderLeaderboard("finalBoard");
+  recordLeaderboardEntry();
+  showScreen("final");
+}
+
+function finishEvent(kind, title, lines){
+  App.eventsPlayed[kind]++;
+  App.roundsPlayed++;
+  simulateAITeams(CONFIG.aiBurgersPerEventRange);
+
+  // after CONFIG.maxEventRounds total event visits, the Olympics wraps up
+  // on its own — no need for anyone to remember to hit "Finish"
+  resultLeadsToFinal = App.roundsPlayed >= CONFIG.maxEventRounds;
+  const roundsLine = `<div style="margin-top:6px;color:var(--ink-dim);font-size:14px;">Event ${App.roundsPlayed} of ${CONFIG.maxEventRounds}</div>`;
+
+  $("resultTitle").textContent = title;
+  $("resultBox").innerHTML = lines.map(l => `<div>${l}</div>`).join("") + roundsLine;
+  $("btnBackToVillage").textContent = resultLeadsToFinal ? "🏆 SEE CHAMPION" : "◀ BACK TO VILLAGE";
+  showScreen("result");
+}
+
+/* =========================================================================
+   TEAM SELECT + VILLAGE LEADERBOARD
+   ========================================================================= */
+const teamGrid = $("teamGrid");
+CONFIG.teams.forEach(t => {
+  const card = document.createElement("button");
+  card.className = "team-card";
+  card.innerHTML = `<div class="dot" style="background:${t.color}">${t.name.split(" ")[1][0]}</div>
+                     <div class="name">${t.name}</div>
+                     <div class="sub">Captain</div>`;
+  card.addEventListener("click", () => {
+    const typed = $("playerNameInput").value.trim();
+    App.playerName = typed ? typed.slice(0, 18) : "Anonymous Potato";
+    App.team = t.key;
+    showScreen("village");
+  });
+  teamGrid.appendChild(card);
+});
+
+function renderShop(){
+  const bank = App.team ? App.leaderboard[App.team] : 0;
+  $("shopBank").textContent = `🍔 ${bank} to spend`;
+  $("shopList").innerHTML = SHOP_ITEMS.map(it => {
+    const owned = !!App.owned[it.key];
+    const afford = bank >= it.cost;
+    const btnLabel = owned ? "OWNED" : `🍔${it.cost}`;
+    return `<div class="shop-item">
+      <div class="icon">${it.icon}</div>
+      <div class="info">
+        <div class="nm">${it.name}</div>
+        <div class="desc">${it.desc}</div>
+      </div>
+      <button class="buy" data-key="${it.key}" ${owned || !afford ? "disabled" : ""}>${btnLabel}</button>
+    </div>`;
+  }).join("");
+
+  $("shopList").querySelectorAll(".buy").forEach(btn => {
+    btn.addEventListener("click", () => buyItem(btn.dataset.key));
+  });
+}
+
+function buyItem(key){
+  if (!App.team) return;
+  const item = SHOP_ITEMS.find(i => i.key === key);
+  if (!item || App.owned[key]) return;
+  if (App.leaderboard[App.team] < item.cost) return;
+  App.leaderboard[App.team] -= item.cost;
+  App.owned[key] = true;
+  beep(440,0.08,"square");
+  renderShop();
+}
+
+function renderLeaderboard(targetId){
+  const el = $(targetId || "leaderboard");
+  const sorted = [...CONFIG.teams].sort((a,b) => App.leaderboard[b.key]-App.leaderboard[a.key]);
+  const max = Math.max(1, ...CONFIG.teams.map(t => App.leaderboard[t.key]));
+  el.innerHTML = sorted.map(t => {
+    const val = App.leaderboard[t.key];
+    const pct = Math.round((val/max)*100);
+    const you = t.key === App.team ? " (you)" : "";
+    return `<div class="board-row">
+      <div class="dot" style="background:${t.color}"></div>
+      <div class="nm">${t.name.split(" ")[1]}${you}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${t.color}"></div></div>
+      <div class="amt">🍔${val}</div>
+    </div>`;
+  }).join("");
+}
+
+/* =========================================================================
+   CLASS LEADERBOARD — a shared, persistent record of every classmate's
+   final score, synced across every iPad via the "db" capability. This is
+   deliberately separate from App.leaderboard above: that's each team's
+   in-session spendable bank (resets every playthrough); this is the
+   permanent, class-wide competition (never resets). Only a HUMAN
+   player's finish is ever written here — the 3 AI teams in any given
+   session never touch this store.
+   ========================================================================= */
+let db = null;
+(async () => {
+  try{
+    db = (window.claude && window.claude.use) ? await window.claude.use("db") : null;
+  }catch(e){ db = null; }
+})();
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+// "Sep 13, 3:45 PM" — compact date + time for a leaderboard row
+function formatWhen(ts){
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  const datePart = d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+  const timePart = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+  return `${datePart}, ${timePart}`;
+}
+
+async function recordLeaderboardEntry(){
+  if (!db || !App.team) return;
+  const team = CONFIG.teams.find(t => t.key === App.team);
+  try{
+    await db.collection("leaderboard").add({
+      name: App.playerName || "Anonymous Potato",
+      team: App.team,
+      teamName: team ? team.name : App.team,
+      color: team ? team.color : "#ffb84d",
+      burgers: App.leaderboard[App.team],
+      ts: Date.now()
+    });
+  }catch(e){ /* the shared leaderboard is a bonus feature — never block the game on it */ }
+}
+
+async function refreshClassLeaderboard(){
+  const el = $("classBoardList");
+  if (!db){
+    el.innerHTML = `<div class="hint">The class leaderboard isn't connected yet — ask a grown-up to finish setting it up!</div>`;
+    return;
+  }
+  el.innerHTML = `<div class="hint">Loading…</div>`;
+  try{
+    const snap = await db.collection("leaderboard").orderBy("burgers", "desc").limit(10).get();
+    if (snap.empty){
+      el.innerHTML = `<div class="hint">No one has finished a game yet — be the first!</div>`;
+      return;
+    }
+    el.innerHTML = snap.docs.map((doc, i) => {
+      const v = doc.data();
+      const teamAndWhen = [v.teamName, formatWhen(v.ts)].filter(Boolean).join(" · ");
+      return `<div class="class-row">
+        <div class="rank pixel">${i+1}</div>
+        <div class="dot" style="background:${v.color || "#ffb84d"}"></div>
+        <div class="who">
+          <div class="who-name">${escapeHtml(v.name || "Player")}</div>
+          <div class="who-team">${escapeHtml(teamAndWhen)}</div>
+        </div>
+        <div class="amt">🍔${Number(v.burgers) || 0}</div>
+      </div>`;
+    }).join("");
+  }catch(e){
+    el.innerHTML = `<div class="hint">Couldn't load the leaderboard right now — check your connection and try again.</div>`;
+  }
+}
+
+/* =========================================================================
+   BUTTON WIRING
+   ========================================================================= */
+$("btnStart").addEventListener("click", () => showScreen("blurbOlympics"));
+$("btnToTeamSelect").addEventListener("click", () => showScreen("teamSelect"));
+
+$("btnGoCatapult").addEventListener("click", () => { Catapult.begin(); showScreen("catapult"); });
+$("btnGoBowling").addEventListener("click", () => { Bowling.begin(); showScreen("bowling"); });
+$("btnGoShop").addEventListener("click", () => showScreen("shop"));
+$("btnShopBack").addEventListener("click", () => showScreen("village"));
+$("btnFinish").addEventListener("click", crownChampion);
+$("btnBackToVillage").addEventListener("click", () => {
+  if (resultLeadsToFinal) crownChampion(); else showScreen("village");
+});
+
+$("btnMenuLeaderboard").addEventListener("click", () => { classBoardReturnTo = "menu"; showScreen("classBoard"); });
+$("btnVillageLeaderboard").addEventListener("click", () => { classBoardReturnTo = "village"; showScreen("classBoard"); });
+$("btnFinalLeaderboard").addEventListener("click", () => { classBoardReturnTo = "final"; showScreen("classBoard"); });
+$("btnClassBoardBack").addEventListener("click", () => showScreen(classBoardReturnTo));
+
+$("btnPlayAgain").addEventListener("click", () => {
+  // the shared CLASS leaderboard (recorded in recordLeaderboardEntry) is
+  // never touched here — only this session's own team banks/shop reset,
+  // so the class-wide competition keeps going all day.
+  App.team = null;
+  App.playerName = null;
+  App.owned = {};
+  App.aiOwned = {};
+  App.roundsPlayed = 0;
+  resultLeadsToFinal = false;
+  CONFIG.teams.forEach(t => { App.leaderboard[t.key] = 0; });
+  App.eventsPlayed = { catapult:0, bowling:0 };
+  showScreen("menu");
+});
+
+/* keyboard convenience for laptop testing (bonus, not required) */
+window.addEventListener("keydown", (e) => {
+  if (App.state === "catapult" && e.code === "Space") { e.preventDefault(); Catapult.startCharge(); }
+  if (App.state === "bowling" && e.code === "Space") { e.preventDefault(); Bowling.startCharge(); }
+});
+window.addEventListener("keyup", (e) => {
+  if (App.state === "catapult" && e.code === "Space") Catapult.release();
+  if (App.state === "bowling" && e.code === "Space") Bowling.release();
+  if (App.state === "catapult"){
+    if (e.key === "ArrowLeft") { Catapult.angleDeg = clamp(Catapult.angleDeg-2,20,70); $("catapultAngle").value = Catapult.angleDeg; }
+    if (e.key === "ArrowRight") { Catapult.angleDeg = clamp(Catapult.angleDeg+2,20,70); $("catapultAngle").value = Catapult.angleDeg; }
+  }
+  if (App.state === "bowling"){
+    if (e.key === "ArrowLeft") { Bowling.aimDeg = clamp(Bowling.aimDeg-2,-25,25); $("bowlingAim").value = Bowling.aimDeg; }
+    if (e.key === "ArrowRight") { Bowling.aimDeg = clamp(Bowling.aimDeg+2,-25,25); $("bowlingAim").value = Bowling.aimDeg; }
+  }
+});
+
+/* =========================================================================
+   MAIN LOOP
+   ========================================================================= */
+let lastT = performance.now();
+function tick(t){
+  const dt = Math.min(0.033, (t-lastT)/1000);
+  lastT = t;
+
+  if (App.state === "catapult"){ Catapult.update(dt); Catapult.draw(); }
+  else if (App.state === "bowling"){ Bowling.update(dt); Bowling.draw(); }
+
+  requestAnimationFrame(tick);
+}
+
+/* =========================================================================
+   BOOT — supports the Artifact platform's hot-reload snapshot so a
+   republish mid-game doesn't wipe the player's progress.
+   ========================================================================= */
+function snapshotState(){
+  return {
+    state: App.state, team: App.team, playerName: App.playerName,
+    leaderboard: App.leaderboard, owned: App.owned, aiOwned: App.aiOwned,
+    eventsPlayed: App.eventsPlayed, roundsPlayed: App.roundsPlayed
+  };
+}
+function boot(saved){
+  if (saved && saved.leaderboard){
+    Object.assign(App.leaderboard, saved.leaderboard);
+    App.owned = saved.owned || {};
+    App.aiOwned = saved.aiOwned || {};
+    App.team = saved.team || null;
+    App.playerName = saved.playerName || null;
+    App.eventsPlayed = saved.eventsPlayed || App.eventsPlayed;
+    App.roundsPlayed = saved.roundsPlayed || 0;
+    showScreen(saved.team ? "village" : "menu");
+  } else {
+    showScreen("menu");
+  }
+  resizeCanvas();
+  requestAnimationFrame(tick);
+}
+if (window.claude && window.claude.hot){
+  window.claude.hot.snapshot(snapshotState);
+  window.claude.hot.ready ? window.claude.hot.ready(boot) : boot(window.claude.hot.data);
+} else {
+  boot(null);
+}
+
+$("creditLine").textContent = CONFIG.credit;
+
+})();
+</script>
+
+</body>
+</html>
