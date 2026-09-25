@@ -1,9 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Potato Olympics</title>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Potato Olympics</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
 <style>
@@ -420,10 +415,7 @@ input[type="range"]::-moz-range-thumb{
 @media (prefers-reduced-motion: reduce){
   .btn{ transition:none; }
 }
-</style>
-</head>
-<body>
-
+</style></head><body>
 
 <div class="cabinet">
   <div class="marquee pixel">
@@ -1265,25 +1257,39 @@ function renderLeaderboard(targetId){
 
 /* =========================================================================
    CLASS LEADERBOARD — a shared, persistent record of every classmate's
-   final score, synced across every iPad via the "db" capability. This is
-   deliberately separate from App.leaderboard above: that's each team's
-   in-session spendable bank (resets every playthrough); this is the
-   permanent, class-wide competition (never resets). Only a HUMAN
-   player's finish is ever written here — the 3 AI teams in any given
-   session never touch this store.
+   final score, stored in Airtable so it works from a plain public page
+   (no Claude sign-in involved at all). This is deliberately separate from
+   App.leaderboard above: that's each team's in-session spendable bank
+   (resets every playthrough); this is the permanent, class-wide
+   competition (never resets). Only a HUMAN player's finish is ever
+   written here — the 3 AI teams in any given session never touch it.
+
+   SECURITY NOTE for whoever edits this next: this token can only read
+   and write the ONE dedicated Airtable base it was scoped to when it was
+   created — never point it at a base that holds anything else, because
+   this file is public and the token is sitting right here in plain view.
    ========================================================================= */
-let db = null;
-(async () => {
-  try{
-    db = (window.claude && window.claude.use) ? await window.claude.use("db") : null;
-  }catch(e){ db = null; }
-})();
+const AIRTABLE = {
+  baseId: "app28JPBi39e5awTL",
+  table: "Potato Olympics",
+  token: "patX9Yjf4isOHPWKW.c1f4b845c52221054f4afe75ea4e6f2aa395844a5367e481d8cc69f961f62d24"
+};
+function airtableUrl(query){
+  const base = `https://api.airtable.com/v0/${AIRTABLE.baseId}/${encodeURIComponent(AIRTABLE.table)}`;
+  return query ? `${base}?${query}` : base;
+}
+function airtableHeaders(withJsonType){
+  const h = { "Authorization": `Bearer ${AIRTABLE.token}` };
+  if (withJsonType) h["Content-Type"] = "application/json";
+  return h;
+}
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
 
-// "Sep 13, 3:45 PM" — compact date + time for a leaderboard row
+// "Sep 13, 3:45 PM" — compact date + time for a leaderboard row. Accepts
+// either an ISO string (Airtable's createdTime) or a millisecond number.
 function formatWhen(ts){
   if (!ts) return "";
   const d = new Date(ts);
@@ -1293,45 +1299,52 @@ function formatWhen(ts){
   return `${datePart}, ${timePart}`;
 }
 
+function teamColorByName(teamName){
+  const t = CONFIG.teams.find(t => t.name === teamName);
+  return t ? t.color : "#ffb84d";
+}
+
 async function recordLeaderboardEntry(){
-  if (!db || !App.team) return;
+  if (!App.team) return;
   const team = CONFIG.teams.find(t => t.key === App.team);
+  const teamName = team ? team.name : App.team;
   try{
-    await db.collection("leaderboard").add({
-      name: App.playerName || "Anonymous Potato",
-      team: App.team,
-      teamName: team ? team.name : App.team,
-      color: team ? team.color : "#ffb84d",
-      burgers: App.leaderboard[App.team],
-      ts: Date.now()
+    await fetch(airtableUrl(), {
+      method: "POST",
+      headers: airtableHeaders(true),
+      body: JSON.stringify({ records: [{ fields: {
+        Name: App.playerName || "Anonymous Potato",
+        Team: teamName,
+        Burgers: App.leaderboard[App.team] || 0
+      } }] })
     });
   }catch(e){ /* the shared leaderboard is a bonus feature — never block the game on it */ }
 }
 
 async function refreshClassLeaderboard(){
   const el = $("classBoardList");
-  if (!db){
-    el.innerHTML = `<div class="hint">The class leaderboard isn't connected yet — ask a grown-up to finish setting it up!</div>`;
-    return;
-  }
   el.innerHTML = `<div class="hint">Loading…</div>`;
   try{
-    const snap = await db.collection("leaderboard").orderBy("burgers", "desc").limit(10).get();
-    if (snap.empty){
+    const query = "maxRecords=10&sort%5B0%5D%5Bfield%5D=Burgers&sort%5B0%5D%5Bdirection%5D=desc";
+    const res = await fetch(airtableUrl(query), { headers: airtableHeaders(false) });
+    if (!res.ok) throw new Error("airtable_" + res.status);
+    const data = await res.json();
+    const records = data.records || [];
+    if (!records.length){
       el.innerHTML = `<div class="hint">No one has finished a game yet — be the first!</div>`;
       return;
     }
-    el.innerHTML = snap.docs.map((doc, i) => {
-      const v = doc.data();
-      const teamAndWhen = [v.teamName, formatWhen(v.ts)].filter(Boolean).join(" · ");
+    el.innerHTML = records.map((rec, i) => {
+      const f = rec.fields || {};
+      const teamAndWhen = [f.Team, formatWhen(rec.createdTime)].filter(Boolean).join(" · ");
       return `<div class="class-row">
         <div class="rank pixel">${i+1}</div>
-        <div class="dot" style="background:${v.color || "#ffb84d"}"></div>
+        <div class="dot" style="background:${teamColorByName(f.Team)}"></div>
         <div class="who">
-          <div class="who-name">${escapeHtml(v.name || "Player")}</div>
+          <div class="who-name">${escapeHtml(f.Name || "Player")}</div>
           <div class="who-team">${escapeHtml(teamAndWhen)}</div>
         </div>
-        <div class="amt">🍔${Number(v.burgers) || 0}</div>
+        <div class="amt">🍔${Number(f.Burgers) || 0}</div>
       </div>`;
     }).join("");
   }catch(e){
@@ -1444,6 +1457,4 @@ $("creditLine").textContent = CONFIG.credit;
 
 })();
 </script>
-
-</body>
-</html>
+</body></html>
